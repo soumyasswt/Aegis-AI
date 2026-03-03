@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import { scanSessions, scanPipeline } from './server/orchestrator.js';
 import { handleOobCallback } from './server/oobFuzzer.js';
 import db from './server/db.js';
+import defenseAnalyticsRouter from './server/defenseAnalytics.js';
+import defenseHeatmapRouter from './server/defenseHeatmap.js';
 
 dotenv.config();
 
@@ -14,6 +16,9 @@ const PORT = 3000;
 app.use(express.json());
 
 // --- API Routes ---
+
+app.use('/api/analytics', defenseAnalyticsRouter);
+app.use('/api/analytics', defenseHeatmapRouter);
 
 app.get('/api/oob/:id', (req, res) => {
   const { id } = req.params;

@@ -1,100 +1,72 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
 
-const dbPath = path.join(process.cwd(), 'aegis.db');
-const db = new Database(dbPath);
+import Database from 'better-sqlite3';
+
+const db = new Database('aegis.db');
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
 
-// Initialize schema
+// Initial Schema
 db.exec(`
-  CREATE TABLE IF NOT EXISTS targets (
+  CREATE TABLE IF NOT EXISTS scan_sessions (
     id TEXT PRIMARY KEY,
-    url TEXT UNIQUE NOT NULL,
-    last_scan_at DATETIME,
-    waf_detected BOOLEAN DEFAULT 0,
-    waf_name TEXT,
-    notes TEXT
+    start_time INTEGER NOT NULL,
+    end_time INTEGER,
+    status TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS scans (
-    id TEXT PRIMARY KEY,
-    target_id TEXT NOT NULL,
-    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    end_time DATETIME,
-    status TEXT NOT NULL,
-    FOREIGN KEY(target_id) REFERENCES targets(id)
+  CREATE TABLE IF NOT EXISTS targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_session_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    waf_detected TEXT,
+    FOREIGN KEY (scan_session_id) REFERENCES scan_sessions(id)
   );
 
   CREATE TABLE IF NOT EXISTS endpoints (
-    id TEXT PRIMARY KEY,
-    target_id TEXT NOT NULL,
-    path TEXT NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
     method TEXT NOT NULL,
-    FOREIGN KEY(target_id) REFERENCES targets(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS parameters (
-    id TEXT PRIMARY KEY,
-    endpoint_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    FOREIGN KEY(endpoint_id) REFERENCES endpoints(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS payload_attempts (
-    id TEXT PRIMARY KEY,
-    scan_id TEXT NOT NULL,
-    parameter_id TEXT,
-    payload TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    response_signature TEXT,
-    FOREIGN KEY(scan_id) REFERENCES scans(id),
-    FOREIGN KEY(parameter_id) REFERENCES parameters(id)
+    FOREIGN KEY (target_id) REFERENCES targets(id)
   );
 
   CREATE TABLE IF NOT EXISTS vulnerabilities (
-    id TEXT PRIMARY KEY,
-    scan_id TEXT NOT NULL,
-    target_id TEXT NOT NULL,
-    endpoint_id TEXT,
-    parameter_id TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint_id INTEGER NOT NULL,
     type TEXT NOT NULL,
     severity TEXT NOT NULL,
     confidence TEXT NOT NULL,
-    discovered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    closed_at DATETIME,
+    description TEXT,
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL,
+    closed_at INTEGER,
     status TEXT DEFAULT 'open',
-    fingerprint TEXT UNIQUE,
-    proof_of_concept TEXT,
-    explanation TEXT,
-    mitigation TEXT,
-    FOREIGN KEY(scan_id) REFERENCES scans(id),
-    FOREIGN KEY(target_id) REFERENCES targets(id),
-    FOREIGN KEY(endpoint_id) REFERENCES endpoints(id),
-    FOREIGN KEY(parameter_id) REFERENCES parameters(id)
+    FOREIGN KEY (endpoint_id) REFERENCES endpoints(id)
   );
 
-  CREATE TABLE IF NOT EXISTS oob_payloads (
-    id TEXT PRIMARY KEY,
-    scan_id TEXT NOT NULL,
-    target_url TEXT NOT NULL,
-    parameter TEXT NOT NULL,
-    vuln_type TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    hit_at DATETIME,
-    source_ip TEXT,
-    FOREIGN KEY(scan_id) REFERENCES scans(id)
+  CREATE TABLE IF NOT EXISTS payload_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vulnerability_id INTEGER NOT NULL,
+    target_id INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    payload_type TEXT,
+    waf_blocked BOOLEAN DEFAULT 0,
+    response_status INTEGER,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY (vulnerability_id) REFERENCES vulnerabilities(id),
+    FOREIGN KEY (target_id) REFERENCES targets(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS oob_hits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_session_id TEXT NOT NULL,
+    interaction_type TEXT NOT NULL, -- (e.g., DNS, HTTP)
+    subdomain TEXT NOT NULL,
+    ip_address TEXT,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY (scan_session_id) REFERENCES scan_sessions(id)
   );
 `);
-
-try {
-  db.exec('ALTER TABLE vulnerabilities ADD COLUMN closed_at DATETIME;');
-} catch (e) {
-  // Ignore if column already exists
-}
 
 export default db;
