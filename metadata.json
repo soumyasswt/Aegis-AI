@@ -1,0 +1,5 @@
+{
+  "name": "Aegis AI - Bug Bounty Assistant",
+  "description": "An advanced LLM-powered bug bounty assistant that analyzes websites for potential security vulnerabilities.",
+  "requestFramePermissions": []
+}
